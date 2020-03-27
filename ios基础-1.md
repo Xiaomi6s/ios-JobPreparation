@@ -77,7 +77,7 @@ Block();
  访问了auto变量的block是_NSStackBlock_
  [_NSStackBlock_ copy]操作就变成了_NSMallocBlock_
  注意：NSStackBlock 只在mrc下存在，超出变量作用域，栈上的block和_block类型变量都会被销毁，NSMallocBlock在堆区域，在变量作用域结束时，变量不受影响。
-## protocol、category、extension
+## 7.protocol、category、extension
 ### 1.category
 #### 分类的优点
  category可以把类实现到不同的文件里。这样做的好处：
@@ -129,7 +129,26 @@ Block();
 #### +load方法和其他的类方法调用方式不同？
  其他分类的方法是通过消息转发机制调用的，通过isa和superClass来寻找的，而+load是通过函数指针指向函数，拿到函数地址，分开直接调用的，直接通过内存地址查找调用的。
 #### Category中有load方法吗？load方法是什么时候调用的？load 方法能继承吗？
-有load方法
-在runtime加载类和分类的时候调用
-可以继承，但是一般不主动调用load方法，由系统自动调用。
-
+ 有load方法
+ 在runtime加载类和分类的时候调用
+ 可以继承，但是一般不主动调用load方法，由系统自动调用。
+#### +initialize方法是怎么调用的？
+ +initialize是在类第一次接收到消息时调用的，消息转发机制调用（objc_send）
+#### +initialize方法调用顺序？
+ 1.先调用父类的+initalize，再调用子类的+initialize；（先初始化父类，再初始化子类，每个类之后初始化一次）子类内部+initialize会主动调用父类的++initialize。
+ 2.如果子类没有实现+initialize会调用父类的+initialize（所以父类的+initialize可能会调用多次）
+ 3.如果该类的分类中也实现了initialize那么会覆盖原本类中的+initialize，如果多个分类同时实现了最后会调用编译器最后一个参与编译的分类中的+initialize。
+ #### +initialize和+load的区别
+  1.调用方式
+   load是通过函数指针指向函数，拿到函数地址分开调用的，直接通过内存地址查找调用的。
+   initialize是通过objc_msgSend调用的。
+  2.调用时刻
+   load是runtime加载类和分类的时候调用（只调用一次）
+   initialize是类第一次接收到消息时候调用。每一个类之后initialize一次（如果子类没有实现initialize父类的initialize可能会多次调用）。
+  3.调用顺序
+   load先调用类的load（a 先编译的类，先调用 b.在调用子类的load之前会先调用父类的load），再调用分类的load（先编译先调用）
+   initialize先初始化父类，再初始化子类（可能最终调用的是父类的initialize）。
+  #### Category能否添加成员变量？为什么？
+   由于分类底层结构限制，不能添加成员变量到分类中，但是可以通过关联对象实现添加属性。
+   原因：category是通过runtime动态地把category中的方法添加到类中（苹果在实现的过程中并没有将属性添加到类中，所以属性仅仅是声明了setter和getter方法并为实现）在Objective-C提供的runtime函数中确实有一个class_addIvar()函数用于给类添加成员变量，但是这个函数只能在构建类的过程中被调用，一旦完成类定义就不能添加成员变量，经过编译的类在程序启动后被runtime加载，没有机会调用addIvar，程序在运行时动态创建的类需要在调用class_registerClassPair之后才可以被使用，同样没有机会在添加成员变量。
+   方法和属性并不属性类实例，而成员变量属于类实例，我们所说的类实例实际是指一块内存区域，包含了isa指针和所有成员变量，所以假如允许修改类成员变量布局，已经创建出的类实例就不符合类定义了，变成了无效对象，单方法定义是在objc_class中关联的不管如何增删类方法都不影响类实例的内存布局。（因为在运行期，对象的内存布局已经确定，如果添加成员变量就会破坏类内存布局这个是不能添加成员变量的根本原因）
