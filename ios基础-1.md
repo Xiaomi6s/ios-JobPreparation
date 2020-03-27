@@ -43,5 +43,93 @@ b.系统容器类对象（如 array）的copy和mutableCopy
   在runtime中专门维护了一个用于存储weak指针变量的hash表，这个表key是weak指针指向的内存地址，value是指向这个内存地址的所有weak指针，实际是一个数组，释放时根据对象地址获取所有weak指针 地址数组，然后遍历这数组把其中的数据置为nil，最后把这个对象从weak表中删除。
 ## 5.atomic一定是线程安全的吗？
   atomic可以保证setter和getter存取的线程安全，并不能保证整个对象是线程安全的。比如声明一个nsmutablearray对象是原子属性的array，此时self.array和self.array = otherArray是安全的，但是使用【self.array objectAtIndex:index】任然不是线程安全的，需要用锁来保证线程安全。
+## 6.block
+  block本质上是一个oc对象，它内部也有isa指针
+  block是封装了函数调用以及函数调用环境的oc对象
+  block是封装函数及其上下文的oc对象。
+```Objective-C
+int age=10;
+void (^Block)(void) = ^{
+    NSLog(@"age:%d",age);
+};
+age = 20;
+Block();
+```
+输出：age=10，原因是创建block的时候，已经把age的值存储在里面了
+```Objective-C
+auto int age = 10;
+static int num = 25;
+void (^Block)(void) = ^{
+    NSLog(@"age:%d,num:%d",age,num);
+};
+age = 20;
+num = 11;
+Block();
+```
+输出 age=10 num=11 auto变量block访问方式是指传递，static变量block访问是指针传递
+### 为什么block对auto和static变量捕获有差异？
+ auto变量可能会销毁，内存可能会消失，不采用指针访问，static变量一直保存在内存中，指针访问即可。
+### block有几种类型，如何判断是那种类型？
+ __NSGlobalBlock __ 在数据区
+ __NSMallocBlock __ 在堆区
+ __NSStackBlock __ 在栈区
+ 没有访问auto变量的block是_NSGlobalBlock_ 放在数据区
+ 访问了auto变量的block是_NSStackBlock_
+ [_NSStackBlock_ copy]操作就变成了_NSMallocBlock_
+ 注意：NSStackBlock 只在mrc下存在，超出变量作用域，栈上的block和_block类型变量都会被销毁，NSMallocBlock在堆区域，在变量作用域结束时，变量不受影响。
+## protocol、category、extension
+### 1.category
+#### 分类的优点
+ category可以把类实现到不同的文件里。这样做的好处：
+  1.可以减少单个文件的体积。
+  2.可以把不同的功能组织到不同的category里
+  3.可以由多个开发者共同完成一个类
+  4.可以按需加载想要的category
+  5.声明私有方法。
+#### 分类的源码
+  category的源码如下：
+```Objective-C
+  Category 是表示一个指向分类的结构体的指针，其定义如下：
+  typedef struct objc_category *Category;
+  struct objc_category {
+  char *category_name                          OBJC2_UNAVAILABLE; // 分类名
+  char *class_name                             OBJC2_UNAVAILABLE; // 分类所属的类名
+  struct objc_method_list *instance_methods    OBJC2_UNAVAILABLE; // 实例方法列表
+  struct objc_method_list *class_methods       OBJC2_UNAVAILABLE; // 类方法列表
+  struct objc_protocol_list *protocols         OBJC2_UNAVAILABLE; // 分类所实现的协议列表
+  struct property_list_t *_classProperties;
+}
+```
+  从源码我们可以看到category结构体主要包含了分类定义的实例方法、类方法，其中instance_methods 列表是 objc_class 中方法列表的一个子集，而class_methods列表是元类方法列表的一个子集。
+#### 分类的特点
+ 1.category 只能给某个已有的类扩充方法，不能扩充成员变量。
+ 2.category中可以添加属性，只不过@property只会生成setter和getter的声明，不会生成setter和geter的实现和成员变量。
+ 3.如果category中的方法和类中原有方法同名，运行时会优先调用category中的方法也就是category中的方法会覆盖掉类中原有的方法。同名方法调用优先级为：分类>本来>父类
+ 4,如果多个分类中都有和原有类中同名的方法，那么调用顺序由编译器决定，编译器会执行最后一个参与编译的分类中的方法。
+#### 分类的方法何时合并到类对象中？
+ 通过rutime动态将分类的方法合并到类对象、元类对象中
+#### 分类的方法是如何添加到类对象方法列表中的？
+ 1.获取分类方法列表的count，然后原来的类方法列表内存移动count
+ 2.分类方法列表内容拷贝到原来类方法列表的前方。
+ 3.同样的方法，优先调用分类的方法
+ 4.分类具有同样的方法，根据编译顺序决定，取最后编译分类的方法列表。
+#### Category的加载处理过程？
+ 1.通过runtime加载某个类所有category数据
+ 2.把所有Category的方法、属性、协议数据，合并到一个大数组中
+ 3.后面参与编译的category数据，会在数组的前面
+ 4.将合并后的分类数据（方法、属性、协议），插入到类原来数据的前面。
+#### +load方法调用顺序？
+ 1.先调用类的+load方法
+   1.1按照编译先后顺序调用（先编译先调用）
+   1.2先调用父类的+load再调用子类的+load
+ 2.在调用分类的+load方法
+  2.1按照编译先后顺序调用（先编译先调用）
+  2.2每个类、分类的+load在程序中调用一次，只有在加装类的时候调用一次
+  2.3不存在分类的+load方法会覆盖+load的方法。
+#### +load方法和其他的类方法调用方式不同？
+ 其他分类的方法是通过消息转发机制调用的，通过isa和superClass来寻找的，而+load是通过函数指针指向函数，拿到函数地址，分开直接调用的，直接通过内存地址查找调用的。
+#### Category中有load方法吗？load方法是什么时候调用的？load 方法能继承吗？
+有load方法
+在runtime加载类和分类的时候调用
+可以继承，但是一般不主动调用load方法，由系统自动调用。
 
-  
