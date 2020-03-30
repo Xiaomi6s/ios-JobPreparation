@@ -162,3 +162,27 @@ Block();
    Protocol声明了任何类都能够选择实现的程序接口。协议能够使两个不同的继承树上的类相互交流并完成特定的目的。因此它提供了除继承外的另一种选择。任何能够为其他类提供有用行为的类都能够声明接口来匿名的传达这个行为。任何其他类都能够选择遵守这个协议并实现其中的一个或多个方法，从而利用这个行为。如果协议遵守者实现了协议中的方法，那么声明协议的类就能够通过遵守者调用协议中的方法。
 
    协议能声明方法和属性，但是声明的属性没有实现getter和setter方法也不会生成成员变量，这就要求遵守者必须自己实现setter和getter方法，但是有一种情况不需要，那就是遵守者本来就有这个属性，此时系统会为这个属性自动生成setter和getter方法，既然已经实现了，那么遵守者就没必要去实现协议中的这个属性了。
+## const、static、extern
+  static：被static修饰的变量属于静态变量存储在静态数据区，该区域的变量在编译时被分配内存而且在app运行期间一直存在内存中，直到app停止运行，所以被static修饰的变量在内存中只存在一份，并且在整个app运行期只被运行一次，用于对变量作用域的限制，限制变量只可在本文件中使用，但是不限制变量的读写。
+  const：被const修饰的右边变量为常量不可修改。
+  extern：对所有文件可见，定义全局变量。
+### static const 与 #define
+ 相同点：都不能再被修改
+ 不同点：static const修饰只有一份内存，宏定义只是简单的替换，每次使用都需要创建一份内存。
+ 使用static const修饰更加高效，在同一个文件内可以使用static const 取代#define。
+### const 和 extern 在开发中的使用
+ extern 和 const共同使用定义全局常量的文件
+ 一般在先建.h文件专门存放常量的引用。
+ ``` Objective-c
+ #import <Foundation/Foundation.h>
+
+extern NSString *const appKey;
+extern NSString *const notificationName;
+ ```
+ 在.m文件中专门存放const修饰的变量，需要的时候导入头文件。
+  ``` Objective-c
+ #import "Const.h"
+
+NSString *const appKey           = @"12666666";
+NSString *const notificationName = @"notification";
+ ```
