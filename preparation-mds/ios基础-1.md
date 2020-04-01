@@ -191,9 +191,33 @@ NSString *const notificationName = @"notification";
 static 和const组合可以定义局部作用的静态常量。
 
 ## 8.内存管理
+
 ### 内存的五大分区
  > + 栈区（stack）：由编译器自动完成分配和释放，不需要程序员手动管理，主要存储了函数的参数和局部变量等。栈区地址从高到低分配，先进后出。会存一些局部变量，函数跳转跳转时现场保护(寄存器值保存于恢复)，这些系统都会帮我们自动实现，无需我们干预。
  > + 堆区（heap）：需要程序员手动开辟并管理内存（arc模式下不需要程序员考虑释放问题，mrc下alloc申请内存，release释放内存） 创建的对象都放在这里，堆区的地址是从低到高的分配。
  > + 全局区/静态区(static)：全局变量和静态变量的存储是放在一起的，初始化的全局变量和静态变量在一块区域，未初始化的全局变量和未初始化的静态变量在相邻的另一块区域。程序结束后系统释放。
  > + 常量区：存放常量，程序结束后系统释放。
  > + 代码区： 存放app代码，app程序会拷贝到这里。
+
+### oc内存管理原则
+  oc使用了一种引用计数的机制来管理对象，在MRC下如果对一个对象使用了alloc、copy、retain，那么你必须使用相应的release或者autorelease（即遵循谁创建谁释放，谁引用谁管理的原则）。在arc（自动引用计数）系统会在编译的时候在合适地方插入retain、release和autorelease，通过生成正确的代码区自动释放对象和保持对象。
+### autorelease以及autoreleasePool
+ autorelease实际上只是把对release的调用延后了，对于每一个autorelease，系统只是把该object放入了当前的autoreleasePool中，当pool被释放时，该pool中所有的object会被调用release。
+ 
+ autoreleasePool的作用：autoreleasePool被称为自动释放池，在释放池中调用了autorelease方法的对象都会被压在该池的顶部（以栈的形式管理对象）。当自动释放池被销毁时，在该池中的对象会自动调用release方法释放资源销毁对象，以此来达到自动管理内存的目的。
+### autoreleasePool是什么时候被创建和销毁的？
+ app启动后系统在主线程的runloop里注册两个observe，回调都是_wrapRunLoopWithAutoreleasePoolHandler（）。
+ 第一个observe监听的事件:
+  是entry（即将进入loop），其回调内会调用_objc_autoreleasePoolPush（）创建自动释放池，其优先级最高，保证创建释放池发生在其他回调之前。
+ 第二个observe监听了两个事件
+  _BeforeWaiting（准备进入休眠）时，调用_objc_autoreleasePoolPop（）和_objc_autoreleasePoolPush（）释放旧的池，并创建新的池
+
+  _Exit（即将退出loop）时，调用 _objc_autoreleasePoolPop（）来释放自动释放池，这个observe优先级最底，保证其释放池在其他回调之后。
+
+  在主线程执行的代码，通常写在诸如事件回调，Timer回调内，这些回调会被runloop创建好的autoreleasePool环绕着，所以不会内存泄漏，所以开发者不必显示创建pool了。
+
+  现在我们知道autoreleasePool是在runloop即将进入runloop和准备进入休眠这两种状态的时候被创建和销毁的。
+
+  所以autorelease的释放有两种情况：1.autorelease对象是在当前的runloop迭代结束时释放的，而他能够释放的原因是系统在每个runloop迭代中都加入了自动释放池的push和pop。2.手动调用autoreleasePool的释放方法（drain方法）来销毁autoreleasePool。
+ 
+
