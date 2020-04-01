@@ -199,14 +199,14 @@ static 和const组合可以定义局部作用的静态常量。
  > + 常量区：存放常量，程序结束后系统释放。
  > + 代码区： 存放app代码，app程序会拷贝到这里。
 
-### oc内存管理原则
+ ### 内存管理原则
  oc使用了一种引用计数的机制来管理对象，在MRC下如果对一个对象使用了alloc、copy、retain，那么你必须使用相应的release或者autorelease（即遵循谁创建谁释放，谁引用谁管理的原则）。在arc（自动引用计数）系统会在编译的时候在合适地方插入retain、release和autorelease，通过生成正确的代码区自动释放对象和保持对象。
-
+ 
 ### autorelease以及autoreleasePool
  autorelease实际上只是把对release的调用延后了，对于每一个autorelease，系统只是把该object放入了当前的autoreleasePool中，当pool被释放时，该pool中所有的object会被调用release。
  
  autoreleasePool的作用：autoreleasePool被称为自动释放池，在释放池中调用了autorelease方法的对象都会被压在该池的顶部（以栈的形式管理对象）。当自动释放池被销毁时，在该池中的对象会自动调用release方法释放资源销毁对象，以此来达到自动管理内存的目的。
- 
+
 ### autoreleasePool是什么时候被创建和销毁的？
  app启动后系统在主线程的runloop里注册两个observe，回调都是_wrapRunLoopWithAutoreleasePoolHandler（）。
  第一个observe监听的事件:
@@ -222,4 +222,3 @@ static 和const组合可以定义局部作用的静态常量。
 
   所以autorelease的释放有两种情况：1.autorelease对象是在当前的runloop迭代结束时释放的，而他能够释放的原因是系统在每个runloop迭代中都加入了自动释放池的push和pop。2.手动调用autoreleasePool的释放方法（drain方法）来销毁autoreleasePool。
  
-
